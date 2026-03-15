@@ -3,19 +3,34 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LotPulse Map</title>
+  <title>LotPulse Live Map</title>
 
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
   />
 
   <style>
+    :root {
+      --bg: #08111f;
+      --panel: rgba(10, 21, 39, 0.88);
+      --text: #e8eef7;
+      --muted: #9fb0c8;
+      --border: rgba(255, 255, 255, 0.1);
+      --shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    }
+
+    * { box-sizing: border-box; }
+
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
-      font-family: Arial, sans-serif;
+      font-family: Inter, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
     }
 
     #map {
@@ -23,72 +38,431 @@
       height: 100vh;
     }
 
-    .lot-label {
-      background: rgba(255, 255, 255, 0.9);
-      border: 1px solid #333;
-      border-radius: 4px;
-      padding: 2px 6px;
+    .topbar {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 1000;
+      width: min(420px, calc(100vw - 28px));
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      padding: 14px 16px;
+    }
+
+    .title {
+      margin: 0 0 6px 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .statusbar {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
       font-size: 12px;
-      font-weight: 600;
-      color: #111;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border);
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+    }
+
+    .legend {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      z-index: 1000;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      padding: 12px 14px;
+      min-width: 190px;
+      color: var(--text);
+    }
+
+    .legend h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.18);
+      flex: 0 0 14px;
+    }
+
+    .lot-label {
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(16, 24, 40, 0.18);
+      border-radius: 8px;
+      padding: 4px 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      color: #111827;
+      font-size: 11px;
+      line-height: 1.15;
+      text-align: center;
       white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .lot-label .meta {
+      display: block;
+      margin-top: 2px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #475467;
+    }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px;
+    }
+
+    .popup-title {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: #101828;
+    }
+
+    .popup-grid {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 6px 14px;
+      font-size: 13px;
+      color: #344054;
+    }
+
+    .popup-grid strong {
+      color: #101828;
+    }
+
+    @media (max-width: 640px) {
+      .topbar {
+        width: calc(100vw - 20px);
+        top: 10px;
+        left: 10px;
+      }
+
+      .legend {
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        min-width: 0;
+      }
     }
   </style>
 </head>
 <body>
+  <div class="topbar">
+    <h1 class="title">LotPulse Live Map</h1>
+    <p class="subtitle">Live parking-lot layer for International City. Values are joined from Google Sheets using <strong>Lot_ID</strong>.</p>
+    <div class="statusbar">
+      <span class="pill" id="sheetStatus">Sheet: not loaded</span>
+      <span class="pill" id="lotCount">Lots: 0</span>
+      <span class="pill" id="lastRefresh">Refresh: pending</span>
+    </div>
+  </div>
+
   <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <div class="legend">
+    <h3>Availability</h3>
+    <div class="legend-row"><span class="swatch" style="background:#16a34a"></span> High availability</div>
+    <div class="legend-row"><span class="swatch" style="background:#f59e0b"></span> Low availability</div>
+    <div class="legend-row"><span class="swatch" style="background:#dc2626"></span> Full / zero available</div>
+    <div class="legend-row"><span class="swatch" style="background:#64748b"></span> Unknown / missing data</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const map = L.map('map').setView([25.1615, 55.404], 16);
+    // Replace this with your published CSV URL from Google Sheets.
+    // Example:
+    // https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&sheet=Lots%20Master
+    const SHEET_CSV_URL = 'PASTE_GOOGLE_SHEET_CSV_URL_HERE';
+
+    // Local GeoJSON file exported from QGIS and committed to the repo root.
+    const GEOJSON_URL = 'lots.geojson';
+
+    // Auto refresh interval for sheet data.
+    const REFRESH_MS = 60000;
+
+    const map = L.map('map', { zoomControl: true }).setView([25.1615, 55.4040], 16);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 20,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    fetch('lots.geojson')
-      .then(response => response.json())
-      .then(data => {
-        const geojsonLayer = L.geoJSON(data, {
-          style: function () {
-            return {
-              color: '#ff6600',
-              weight: 2,
-              fillColor: '#ff9900',
-              fillOpacity: 0.30
-            };
-          },
-          onEachFeature: function (feature, layer) {
-            const lotId =
-              feature.properties?.lot_id ??
-              feature.properties?.Lot_ID ??
-              'Unknown';
+    let geojsonData = null;
+    let lotsLayer = null;
+    let labelLayer = L.layerGroup().addTo(map);
 
-            layer.bindPopup(
-              `<b>Lot ID:</b> ${lotId}`
-            );
+    const sheetStatusEl = document.getElementById('sheetStatus');
+    const lotCountEl = document.getElementById('lotCount');
+    const lastRefreshEl = document.getElementById('lastRefresh');
 
-            const center = layer.getBounds().getCenter();
+    function updateStatus(text, ok = true) {
+      sheetStatusEl.textContent = `Sheet: ${text}`;
+      sheetStatusEl.style.color = ok ? '#b8f5c4' : '#fecaca';
+    }
 
-            L.marker(center, {
-              icon: L.divIcon({
-                className: 'lot-label',
-                html: `Lot ${lotId}`,
-                iconSize: null
-              }),
-              interactive: false
-            }).addTo(map);
+    function updateRefreshTime() {
+      const now = new Date();
+      lastRefreshEl.textContent = `Refresh: ${now.toLocaleTimeString()}`;
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      const lines = text.trim().split(/\r?\n/);
+      if (!lines.length) return rows;
+
+      const headers = splitCsvLine(lines[0]).map(h => h.trim());
+
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const values = splitCsvLine(lines[i]);
+        const row = {};
+        headers.forEach((header, idx) => {
+          row[header] = (values[idx] ?? '').trim();
+        });
+        rows.push(row);
+      }
+
+      return rows;
+    }
+
+    function splitCsvLine(line) {
+      const values = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const next = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && next === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
           }
-        }).addTo(map);
+        } else if (char === ',' && !inQuotes) {
+          values.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
 
-        map.fitBounds(geojsonLayer.getBounds());
-      })
-      .catch(error => {
-        console.error('Failed to load GeoJSON:', error);
-        alert('Could not load lots.geojson');
+      values.push(current);
+      return values;
+    }
+
+    function normalizeSheetRows(rows) {
+      const byId = new Map();
+
+      rows.forEach(row => {
+        const rawLotId = row.Lot_ID ?? row.lot_id ?? row.LotId ?? row.lotId;
+        if (!rawLotId) return;
+
+        const lotId = Number(rawLotId);
+        if (!Number.isFinite(lotId)) return;
+
+        byId.set(lotId, {
+          lot_id: lotId,
+          cluster_name: row.Cluster_Name ?? '',
+          cluster_code: row.Cluster_Code ?? '',
+          cluster_lot: Number(row.Cluster_Lot ?? 0) || 0,
+          lot_name: row.Lot_Name ?? `Lot ${lotId}`,
+          total_slots: Number(row.Total_Slots ?? 0) || 0,
+          available_slots: Number(row.Available_Slots ?? 0) || 0,
+          status: (row.Status ?? '').trim().toUpperCase(),
+          center_lat: Number(row.Center_Lat ?? '') || null,
+          center_lng: Number(row.Center_Lng ?? '') || null,
+          polygon_ref: row.Polygon_Ref ?? '',
+          notes: row.Notes ?? ''
+        });
       });
+
+      return byId;
+    }
+
+    function getFillColor(available, total, status) {
+      if (status && status !== 'ACTIVE') return '#64748b';
+      if (!Number.isFinite(total) || total <= 0) return '#64748b';
+      if (!Number.isFinite(available) || available < 0) return '#64748b';
+      if (available <= 0) return '#dc2626';
+
+      const ratio = available / total;
+      if (ratio <= 0.15) return '#f59e0b';
+      return '#16a34a';
+    }
+
+    function getLabelHtml(row, lotId) {
+      const title = row?.lot_name || `Lot ${lotId}`;
+      const available = Number.isFinite(row?.available_slots) ? row.available_slots : 0;
+      const total = Number.isFinite(row?.total_slots) ? row.total_slots : 0;
+      return `${escapeHtml(title)}<span class="meta">${available} / ${total}</span>`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    async function loadGeoJson() {
+      const response = await fetch(GEOJSON_URL, { cache: 'no-cache' });
+      if (!response.ok) {
+        throw new Error(`GeoJSON load failed: ${response.status}`);
+      }
+      geojsonData = await response.json();
+      return geojsonData;
+    }
+
+    async function loadSheetRows() {
+      if (!SHEET_CSV_URL || SHEET_CSV_URL.includes('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pubhtml?gid=1449202579&single=true')) {
+        updateStatus('publish CSV URL not set', false);
+        return new Map();
+      }
+
+      const bustUrl = `${SHEET_CSV_URL}${SHEET_CSV_URL.includes('?') ? '&' : '?'}_ts=${Date.now()}`;
+      const response = await fetch(bustUrl, { cache: 'no-cache' });
+      if (!response.ok) {
+        throw new Error(`Sheet load failed: ${response.status}`);
+      }
+
+      const text = await response.text();
+      const rows = parseCsv(text);
+      updateStatus('loaded', true);
+      return normalizeSheetRows(rows);
+    }
+
+    function renderLots(sheetMap) {
+      if (!geojsonData) return;
+
+      if (lotsLayer) {
+        map.removeLayer(lotsLayer);
+      }
+      labelLayer.clearLayers();
+
+      let visibleCount = 0;
+
+      lotsLayer = L.geoJSON(geojsonData, {
+        style: feature => {
+          const lotId = Number(feature.properties?.lot_id ?? feature.properties?.Lot_ID);
+          const row = sheetMap.get(lotId);
+          const fillColor = getFillColor(row?.available_slots, row?.total_slots, row?.status);
+          return {
+            color: '#1f2937',
+            weight: 1.25,
+            fillColor,
+            fillOpacity: 0.42
+          };
+        },
+        filter: feature => {
+          const lotId = Number(feature.properties?.lot_id ?? feature.properties?.Lot_ID);
+          const row = sheetMap.get(lotId);
+          if (!row) return true;
+          return row.status !== 'INACTIVE';
+        },
+        onEachFeature: (feature, layer) => {
+          const lotId = Number(feature.properties?.lot_id ?? feature.properties?.Lot_ID);
+          const row = sheetMap.get(lotId);
+          visibleCount += 1;
+
+          const title = row?.lot_name || `Lot ${lotId}`;
+          const available = Number.isFinite(row?.available_slots) ? row.available_slots : 0;
+          const total = Number.isFinite(row?.total_slots) ? row.total_slots : 0;
+          const status = row?.status || 'UNKNOWN';
+          const cluster = row?.cluster_name || row?.cluster_code || '-';
+
+          layer.bindPopup(`
+            <div>
+              <div class="popup-title">${escapeHtml(title)}</div>
+              <div class="popup-grid">
+                <strong>Lot ID</strong><span>${lotId}</span>
+                <strong>Cluster</strong><span>${escapeHtml(cluster)}</span>
+                <strong>Available</strong><span>${available}</span>
+                <strong>Total</strong><span>${total}</span>
+                <strong>Status</strong><span>${escapeHtml(status)}</span>
+              </div>
+            </div>
+          `);
+
+          const center = layer.getBounds().getCenter();
+          const marker = L.marker(center, {
+            icon: L.divIcon({
+              className: 'lot-label',
+              html: getLabelHtml(row, lotId),
+              iconSize: null
+            }),
+            interactive: false
+          });
+          labelLayer.addLayer(marker);
+        }
+      }).addTo(map);
+
+      lotCountEl.textContent = `Lots: ${visibleCount}`;
+
+      if (!map.__fitDone && lotsLayer.getBounds().isValid()) {
+        map.fitBounds(lotsLayer.getBounds(), { padding: [20, 20] });
+        map.__fitDone = true;
+      }
+    }
+
+    async function refreshMap() {
+      try {
+        if (!geojsonData) {
+          await loadGeoJson();
+        }
+        const sheetMap = await loadSheetRows();
+        renderLots(sheetMap);
+        updateRefreshTime();
+      } catch (error) {
+        console.error(error);
+        updateStatus('load failed', false);
+      }
+    }
+
+    refreshMap();
+    setInterval(refreshMap, REFRESH_MS);
   </script>
 </body>
 </html>

@@ -357,7 +357,7 @@
     }
 
     async function loadSheetRows() {
-      if (!SHEET_CSV_URL || SHEET_CSV_URL.includes('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pubhtml?gid=1449202579&single=true')) {
+      if (!SHEET_CSV_URL || SHEET_CSV_URL.includes('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pub?gid=1449202579&single=true&output=csv')) {
         updateStatus('publish CSV URL not set', false);
         return new Map();
       }

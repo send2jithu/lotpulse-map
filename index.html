@@ -1,45 +1,94 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<title>LotPulse Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LotPulse Map</title>
 
-<link rel="stylesheet"
-href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
 
-<style>
-#map { height:100vh; }
-</style>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
 
+    #map {
+      width: 100%;
+      height: 100vh;
+    }
+
+    .lot-label {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #111;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      white-space: nowrap;
+    }
+  </style>
 </head>
-
 <body>
+  <div id="map"></div>
 
-<div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([25.1615, 55.404], 16);
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 20,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-<script>
+    fetch('lots.geojson')
+      .then(response => response.json())
+      .then(data => {
+        const geojsonLayer = L.geoJSON(data, {
+          style: function () {
+            return {
+              color: '#ff6600',
+              weight: 2,
+              fillColor: '#ff9900',
+              fillOpacity: 0.30
+            };
+          },
+          onEachFeature: function (feature, layer) {
+            const lotId =
+              feature.properties?.lot_id ??
+              feature.properties?.Lot_ID ??
+              'Unknown';
 
-var map = L.map('map').setView([25.1615,55.404],16);
+            layer.bindPopup(
+              `<b>Lot ID:</b> ${lotId}`
+            );
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-maxZoom:19
-}).addTo(map);
+            const center = layer.getBounds().getCenter();
 
-fetch("lots.geojson")
-.then(r=>r.json())
-.then(data=>{
-L.geoJSON(data,{
-style:{
-color:"#ff6600",
-weight:2,
-fillOpacity:0.35
-}
-}).addTo(map);
-});
+            L.marker(center, {
+              icon: L.divIcon({
+                className: 'lot-label',
+                html: `Lot ${lotId}`,
+                iconSize: null
+              }),
+              interactive: false
+            }).addTo(map);
+          }
+        }).addTo(map);
 
-</script>
-
+        map.fitBounds(geojsonLayer.getBounds());
+      })
+      .catch(error => {
+        console.error('Failed to load GeoJSON:', error);
+        alert('Could not load lots.geojson');
+      });
+  </script>
 </body>
 </html>

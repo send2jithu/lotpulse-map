@@ -210,7 +210,7 @@
     // Replace this with your published CSV URL from Google Sheets.
     // Example:
     // https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&sheet=Lots%20Master
-    const SHEET_CSV_URL = 'PASTE_GOOGLE_SHEET_CSV_URL_HERE';
+    const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pub?gid=1449202579&single=true&output=csv';
 
     // Local GeoJSON file exported from QGIS and committed to the repo root.
     const GEOJSON_URL = 'lots.geojson';
@@ -357,7 +357,7 @@
     }
 
     async function loadSheetRows() {
-      if (!SHEET_CSV_URL || SHEET_CSV_URL.includes('https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pub?gid=1449202579&single=true&output=csv')) {
+      if (!SHEET_CSV_URL || SHEET_CSV_URL.includes('PASTE_GOOGLE_SHEET_CSV_URL_HERE')) {
         updateStatus('publish CSV URL not set', false);
         return new Map();
       }

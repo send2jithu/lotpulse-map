@@ -287,7 +287,9 @@
     const userId = params.get('user_id') || 'j';
     const mode = params.get('mode') || 'departure';
     const geojsonUrl = params.get('geojson') || './lots.geojson';
-    const lotMasterUrl = params.get('lot_master') || './lot-master.json';
+    const lotLookupCsvUrl =
+      params.get('lot_lookup_csv') ||
+      'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pub?gid=1809032885&single=true&output=csv';
     const postUrl = params.get('post_url') || 'https://lotpulse-server.onrender.com/api/events/departure';
     const successRedirectUrl = params.get('success_redirect') || './index.html';
     const autoCloseDelayMs = Number(params.get('close_delay_ms') || '1800');
@@ -319,7 +321,6 @@
     let lotNameLookup = new Map();
     const lotLayers = new Map();
     let userLocationMarker = null;
-    let userAccuracyCircle = null;
     let userLatLng = null;
 
     function setStatus(text, type = 'info') {
@@ -334,6 +335,70 @@
 
     function getDisplayLotNameFromId(lotId) {
       return lotNameLookup.get(String(lotId)) || `Lot ${lotId}`;
+    }
+
+    function parseCsvLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const next = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && next === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+
+      result.push(current.trim());
+      return result;
+    }
+
+    function parseCsv(text) {
+      const lines = text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      if (lines.length < 2) return [];
+
+      const headers = parseCsvLine(lines[0]);
+
+      return lines.slice(1).map(line => {
+        const values = parseCsvLine(line);
+        const row = {};
+        headers.forEach((header, i) => {
+          row[header] = values[i] ?? '';
+        });
+        return row;
+      });
+    }
+
+    async function loadLotMaster() {
+      const res = await fetch(lotLookupCsvUrl);
+      if (!res.ok) {
+        throw new Error(`Failed to load lot lookup CSV: ${res.status}`);
+      }
+
+      const csvText = await res.text();
+      const rows = parseCsv(csvText);
+
+      lotNameLookup = new Map(
+        rows
+          .filter(row => row.Lot_ID && row.Lot_Name)
+          .map(row => [String(row.Lot_ID).trim(), String(row.Lot_Name).trim()])
+      );
     }
 
     function styleForLot(lotId) {
@@ -385,18 +450,6 @@
       }
     }
 
-    async function loadLotMaster() {
-      const res = await fetch(lotMasterUrl);
-      if (!res.ok) {
-        throw new Error(`Failed to load lot master: ${res.status}`);
-      }
-
-      const data = await res.json();
-      lotNameLookup = new Map(
-        data.map(item => [String(item.lot_id), item.lot_name])
-      );
-    }
-
     function updateUserLocation(lat, lng) {
       userLatLng = L.latLng(lat, lng);
 
@@ -412,11 +465,6 @@
           interactive: false,
           bubblingMouseEvents: false
         }).addTo(map);
-      }
-
-      if (userAccuracyCircle) {
-        map.removeLayer(userAccuracyCircle);
-        userAccuracyCircle = null;
       }
 
       locationChipEl.textContent = 'Location: active';

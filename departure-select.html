@@ -132,8 +132,8 @@
     }
 
     .legend-dot {
-      width: 14px;
-      height: 14px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: var(--location);
       border: 2px solid white;
@@ -397,35 +397,29 @@
       );
     }
 
-    function updateUserLocation(lat, lng, accuracy) {
+    function updateUserLocation(lat, lng) {
       userLatLng = L.latLng(lat, lng);
 
       if (userLocationMarker) {
         userLocationMarker.setLatLng(userLatLng);
       } else {
         userLocationMarker = L.circleMarker(userLatLng, {
-          radius: 7,
+          radius: 4,
           color: '#ffffff',
           weight: 2,
           fillColor: '#10b981',
-          fillOpacity: 1
+          fillOpacity: 1,
+          interactive: false,
+          bubblingMouseEvents: false
         }).addTo(map);
       }
 
       if (userAccuracyCircle) {
-        userAccuracyCircle.setLatLng(userLatLng);
-        userAccuracyCircle.setRadius(accuracy || 0);
-      } else {
-        userAccuracyCircle = L.circle(userLatLng, {
-          radius: accuracy || 0,
-          color: '#10b981',
-          weight: 1,
-          fillColor: '#10b981',
-          fillOpacity: 0.08
-        }).addTo(map);
+        map.removeLayer(userAccuracyCircle);
+        userAccuracyCircle = null;
       }
 
-      locationChipEl.textContent = `Location: active`;
+      locationChipEl.textContent = 'Location: active';
     }
 
     function requestUserLocation() {
@@ -438,8 +432,7 @@
         (pos) => {
           updateUserLocation(
             pos.coords.latitude,
-            pos.coords.longitude,
-            pos.coords.accuracy
+            pos.coords.longitude
           );
         },
         () => {

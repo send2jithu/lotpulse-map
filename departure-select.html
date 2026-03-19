@@ -26,6 +26,7 @@
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
@@ -89,8 +90,15 @@
       color: var(--text);
     }
 
-    .chip.predicted { border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; }
-    .chip.selected { border-color: rgba(37, 99, 235, 0.45); color: #93c5fd; }
+    .chip.predicted {
+      border-color: rgba(245, 158, 11, 0.45);
+      color: #fcd34d;
+    }
+
+    .chip.selected {
+      border-color: rgba(37, 99, 235, 0.45);
+      color: #93c5fd;
+    }
 
     .sheet {
       position: absolute;
@@ -212,7 +220,10 @@
         left: 12px;
         right: auto;
       }
-      .buttons { grid-template-columns: 1fr; }
+
+      .buttons {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -230,9 +241,18 @@
     </div>
 
     <div class="legend">
-      <div class="legend-item"><span class="legend-swatch" style="background:#f59e0b"></span><span>Predicted lot</span></div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#2563eb"></span><span>Selected lot</span></div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#475569"></span><span>Other lots</span></div>
+      <div class="legend-item">
+        <span class="legend-swatch" style="background:#f59e0b"></span>
+        <span>Predicted lot</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-swatch" style="background:#2563eb"></span>
+        <span>Selected lot</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-swatch" style="background:#475569"></span>
+        <span>Other lots</span>
+      </div>
     </div>
 
     <div class="sheet">
@@ -265,7 +285,7 @@
   ></script>
   <script>
     const params = new URLSearchParams(window.location.search);
-    const predictedLot = params.get('predicted') || 'FRA_12';
+    const predictedLotName = params.get('predicted_name') || 'FRA 12';
     const userId = params.get('user_id') || 'j';
     const mode = params.get('mode') || 'departure';
     const geojsonUrl = params.get('geojson') || './lots.geojson';
@@ -281,11 +301,14 @@
     const confirmBtn = document.getElementById('confirmBtn');
     const recenterBtn = document.getElementById('recenterBtn');
 
-    predictedChipEl.textContent = `Predicted: ${predictedLot}`;
-    sheetMetaEl.innerHTML = `User: ${userId}<br />Mode: ${mode}<br />Predicted lot: ${predictedLot}`;
-    subtitleEl.textContent = `Tap the correct lot on the map. Predicted lot ${predictedLot} is highlighted.`;
+    predictedChipEl.textContent = `Predicted: ${predictedLotName}`;
+    sheetMetaEl.innerHTML = `User: ${userId}<br />Mode: ${mode}<br />Predicted lot: ${predictedLotName}`;
+    subtitleEl.textContent = `Tap the correct lot on the map. Predicted lot ${predictedLotName} is highlighted.`;
 
-    const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([25.079, 55.161], 16);
+    const map = L.map('map', {
+      zoomControl: true,
+      preferCanvas: true
+    }).setView([25.079, 55.161], 16);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 20,
@@ -297,19 +320,19 @@
     let predictedBounds = null;
     const lotLayers = new Map();
 
-    function normalizeLotId(feature) {
+    function getInternalLotId(feature) {
       const p = feature.properties || {};
-      return p.lot_id || p.Lot_ID || p.lotId || p.code || p.name || p.Lot_Name || p.id || 'UNKNOWN';
+      return p.lot_id || p.Lot_ID || p.lotId || p.id || null;
     }
 
-    function lotName(feature) {
+    function getDisplayLotName(feature) {
       const p = feature.properties || {};
-      return p.lot_name || p.Lot_Name || normalizeLotId(feature);
+      return p.Lot_Name || p.lot_name || p.name || String(getInternalLotId(feature) ?? 'UNKNOWN');
     }
 
-    function styleForLot(lotId) {
-      const isSelected = selectedLot === lotId;
-      const isPredicted = predictedLot === lotId;
+    function styleForLot(lotId, displayName) {
+      const isSelected = selectedLot && selectedLot.lotId === lotId;
+      const isPredicted = predictedLotName === displayName;
 
       if (isSelected) {
         return {
@@ -339,13 +362,15 @@
     }
 
     function updateAllStyles() {
-      lotLayers.forEach((layer, lotId) => {
-        layer.setStyle(styleForLot(lotId));
+      lotLayers.forEach((entry) => {
+        entry.layer.setStyle(styleForLot(entry.lotId, entry.lotName));
       });
-      selectedChipEl.textContent = `Selected: ${selectedLot || '—'}`;
+
+      selectedChipEl.textContent = `Selected: ${selectedLot ? selectedLot.lotName : '—'}`;
       confirmBtn.disabled = !selectedLot;
+
       if (selectedLot) {
-        sheetTitleEl.textContent = `Selected lot: ${selectedLot}`;
+        sheetTitleEl.textContent = `Selected lot: ${selectedLot.lotName}`;
         sheetSubtitleEl.textContent = 'Confirm departure from this selected lot.';
       } else {
         sheetTitleEl.textContent = 'No lot selected';
@@ -360,34 +385,55 @@
 
     async function loadLots() {
       setStatus('Loading lot map…', 'info');
+
       const res = await fetch(geojsonUrl);
-      if (!res.ok) throw new Error(`Failed to load GeoJSON: ${res.status}`);
+      if (!res.ok) {
+        throw new Error(`Failed to load GeoJSON: ${res.status}`);
+      }
+
       const data = await res.json();
 
       geojsonLayer = L.geoJSON(data, {
-        style: (feature) => styleForLot(normalizeLotId(feature)),
+        style: (feature) => {
+          const lotId = getInternalLotId(feature);
+          const displayName = getDisplayLotName(feature);
+          return styleForLot(lotId, displayName);
+        },
         onEachFeature: (feature, layer) => {
-          const lotId = normalizeLotId(feature);
-          const name = lotName(feature);
-          lotLayers.set(lotId, layer);
+          const lotId = getInternalLotId(feature);
+          const displayName = getDisplayLotName(feature);
 
-          layer.bindTooltip(`${lotId}`, { sticky: true, direction: 'center', opacity: 0.9 });
-          layer.on('click', () => {
-            selectedLot = lotId;
-            updateAllStyles();
-            setStatus(`Selected ${name} (${lotId}). Confirm to submit departure.`, 'info');
+          lotLayers.set(lotId, {
+            layer,
+            lotId,
+            lotName: displayName
           });
 
-          if (lotId === predictedLot) {
+          layer.bindTooltip(`${displayName}`, {
+            sticky: true,
+            direction: 'center',
+            opacity: 0.9
+          });
+
+          layer.on('click', () => {
+            selectedLot = {
+              lotId,
+              lotName: displayName
+            };
+            updateAllStyles();
+            setStatus(`Selected ${displayName}. Confirm to submit departure.`, 'info');
+          });
+
+          if (displayName === predictedLotName) {
             predictedBounds = layer.getBounds();
           }
         }
       }).addTo(map);
 
       const bounds = geojsonLayer.getBounds();
+
       if (predictedBounds && predictedBounds.isValid()) {
         map.fitBounds(predictedBounds.pad(0.8));
-        selectedLot = predictedLot;
       } else if (bounds.isValid()) {
         map.fitBounds(bounds.pad(0.15));
       }
@@ -403,12 +449,13 @@
       }
 
       confirmBtn.disabled = true;
-      setStatus(`Submitting departure for ${selectedLot}…`, 'info');
+      setStatus(`Submitting departure for ${selectedLot.lotName}…`, 'info');
 
       try {
         const payload = {
           user_id: userId,
-          lot_id: selectedLot,
+          lot_id: selectedLot.lotId,
+          lot_name: selectedLot.lotName,
           event_type: 'departure_confirmed',
           timestamp: new Date().toISOString(),
           source: 'ios_map_corrected_lot'
@@ -421,14 +468,16 @@
         });
 
         const data = await res.json();
+
         if (!res.ok || !data.ok) {
           throw new Error(data.error || `Request failed: ${res.status}`);
         }
 
-        setStatus(`Departure logged for ${selectedLot}.`, 'success');
+        setStatus(`Departure logged for ${selectedLot.lotName}.`, 'success');
         sheetSubtitleEl.textContent = 'Departure logged successfully.';
       } catch (err) {
-        setStatus(err.message || 'Submission failed.', 'error');
+        setStatus(`Submission failed: ${err.message || 'unknown error'}`, 'error');
+        console.error(err);
       } finally {
         confirmBtn.disabled = false;
       }
@@ -446,6 +495,7 @@
 
     loadLots().catch((err) => {
       setStatus(err.message, 'error');
+      console.error(err);
     });
   </script>
 </body>

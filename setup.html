@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LotPulse Setup</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #0f172a;
+      color: #e5e7eb;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 440px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 20px;
+      padding: 24px;
+      box-sizing: border-box;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+
+    p {
+      margin: 0 0 14px;
+      color: #94a3b8;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .button, button {
+      display: inline-block;
+      width: 100%;
+      text-align: center;
+      text-decoration: none;
+      border: none;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-sizing: border-box;
+      margin-top: 10px;
+    }
+
+    .primary {
+      background: #2563eb;
+      color: white;
+    }
+
+    .secondary {
+      background: rgba(51, 65, 85, 0.9);
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    code {
+      word-break: break-all;
+      color: #93c5fd;
+      font-size: 12px;
+    }
+
+    .status {
+      margin-top: 14px;
+      font-size: 13px;
+      min-height: 18px;
+      color: #93c5fd;
+    }
+
+    .token-box {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>LotPulse Setup</h1>
+    <p>This links your device shortcuts to your LotPulse account automatically.</p>
+    <p id="info">Preparing setup…</p>
+
+    <a id="runSetup" class="button primary" href="#">Run LotPulse Setup</a>
+    <button id="copyToken" class="secondary" type="button">Copy setup token</button>
+
+    <div class="token-box">
+      <code id="tokenPreview">No token detected</code>
+    </div>
+
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const userRef = params.get("user_ref") || "";
+    const shortcutName = params.get("shortcut_name") || "LotPulse Setup";
+
+    const infoEl = document.getElementById("info");
+    const runSetupEl = document.getElementById("runSetup");
+    const copyTokenEl = document.getElementById("copyToken");
+    const tokenPreviewEl = document.getElementById("tokenPreview");
+    const statusEl = document.getElementById("status");
+
+    if (!userRef) {
+      infoEl.textContent = "Missing setup token. Open this page only from the LotPulse bot.";
+      tokenPreviewEl.textContent = "No token detected";
+      runSetupEl.style.display = "none";
+      copyTokenEl.style.display = "none";
+    } else {
+      infoEl.textContent = `Ready to link shortcut: ${shortcutName}`;
+      tokenPreviewEl.textContent = userRef;
+
+      const shortcutUrl =
+        `shortcuts://run-shortcut?name=${encodeURIComponent(shortcutName)}&input=text&text=${encodeURIComponent(userRef)}`;
+
+      runSetupEl.href = shortcutUrl;
+    }
+
+    copyTokenEl.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(userRef);
+        statusEl.textContent = "Setup token copied.";
+      } catch (error) {
+        statusEl.textContent = "Copy failed.";
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,386 +1,357 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LotPulse Live Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
   <style>
+    :root {
+      --bg: #0f172a;
+      --panel: rgba(15, 23, 42, 0.94);
+      --panel-2: rgba(30, 41, 59, 0.96);
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --good: #22c55e;
+      --mid: #f59e0b;
+      --low: #ef4444;
+      --selected: #2563eb;
+      --home: #a855f7;
+      --me: #0ea5e9;
+    }
+
+    * { box-sizing: border-box; }
+
     html, body {
       margin: 0;
       height: 100%;
-      font-family: Arial, sans-serif;
-      background: #0b1220;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    }
+
+    #app {
+      position: relative;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
     }
 
     #map {
+      height: 100%;
       width: 100%;
-      height: 100vh;
-    }
-
-    .panel {
-      position: absolute;
-      z-index: 1000;
-      background: rgba(0, 0, 0, 0.84);
-      color: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
     }
 
     .topbar {
-      top: 14px;
-      left: 14px;
-      padding: 12px;
-      min-width: 280px;
-      max-width: min(480px, calc(100vw - 28px));
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 1000;
+      background: var(--panel);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 18px;
+      padding: 14px 16px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
     }
 
-    .topbar strong {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 15px;
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 4px;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: var(--panel-2);
+      color: var(--text);
     }
 
     .legend {
-      right: 14px;
-      bottom: 14px;
-      padding: 10px;
+      position: absolute;
+      right: 12px;
+      top: 128px;
+      z-index: 1000;
+      background: var(--panel);
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      padding: 10px 12px;
       font-size: 12px;
+      color: var(--muted);
+      backdrop-filter: blur(10px);
     }
 
-    .legend div {
-      margin: 4px 0;
-    }
-
-    .controls {
-      margin-top: 10px;
-      display: grid;
+    .legend-item {
+      display: flex;
+      align-items: center;
       gap: 8px;
+      margin: 6px 0;
     }
 
-    .controls select,
-    .controls input,
-    .controls button {
-      width: 100%;
-      padding: 7px 8px;
-      border-radius: 6px;
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+    }
+
+    .sheet {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 1000;
+      background: var(--panel);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 22px;
+      padding: 16px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .sheet h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+    }
+
+    .sheet p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .sheet-meta {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      appearance: none;
       border: none;
-      box-sizing: border-box;
-      font: inherit;
-    }
-
-    .controls button {
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: 700;
       cursor: pointer;
-      background: #2563eb;
-      color: white;
-      font-weight: 600;
     }
 
-    .controls button.secondary {
-      background: #374151;
+    .btn-secondary {
+      background: rgba(51, 65, 85, 0.9);
+      color: var(--text);
+      border: 1px solid rgba(148, 163, 184, 0.16);
     }
 
-    #status {
-      font-size: 12px;
-      line-height: 1.45;
-      color: #d1d5db;
-      white-space: pre-line;
+    .btn-primary {
+      background: var(--selected);
+      color: #fff;
     }
 
-    .error {
-      color: #fecaca !important;
+    .btn-home {
+      background: rgba(168, 85, 247, 0.18);
+      color: #e9d5ff;
+      border: 1px solid rgba(168, 85, 247, 0.35);
     }
 
-    .hint {
-      color: #93c5fd;
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
-    .lot-label {
-      background: rgba(255, 255, 255, 0.96);
-      border-radius: 6px;
-      padding: 2px 4px;
-      font-size: 10px;
-      font-weight: bold;
-      text-align: center;
-      border: 1px solid rgba(0, 0, 0, 0.12);
-      line-height: 1.15;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-      color: #111827;
-      white-space: nowrap;
+    .status {
+      margin-top: 12px;
+      font-size: 13px;
+      min-height: 18px;
     }
 
-    @media (max-width: 640px) {
-      .topbar {
-        min-width: 0;
-        width: calc(100vw - 28px);
+    .status.error { color: #fca5a5; }
+    .status.success { color: #86efac; }
+    .status.info { color: #93c5fd; }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 14px;
+    }
+
+    .lot-popup {
+      font-size: 13px;
+      line-height: 1.5;
+      min-width: 180px;
+    }
+
+    .lot-popup strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 720px) {
+      .legend {
+        top: auto;
+        bottom: 258px;
+        left: 12px;
+        right: auto;
+      }
+
+      .buttons {
+        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 <body>
-  <div class="panel topbar">
-    <strong>LotPulse Live Map</strong>
-    <div id="status">Loading...</div>
-    <div class="controls">
-      <select id="clusterFilter">
-        <option value="ALL">All</option>
-        <option value="France">France</option>
-        <option value="Spain">Spain</option>
-        <option value="Italy">Italy</option>
-        <option value="Russia">Russia</option>
-        <option value="Emirates">Emirates</option>
-      </select>
-      <input id="csvUrlInput" type="text" placeholder="Optional CSV URL for live sheet data" />
-      <input id="csvFileInput" type="file" accept=".csv,text/csv" />
-      <input id="geojsonUrlInput" type="text" placeholder="GeoJSON URL or leave blank to use local lots.geojson" />
-      <input id="geojsonFileInput" type="file" accept=".geojson,.json,application/geo+json,application/json" />
-      <button id="reloadButton" type="button">Reload map data</button>
-      <button id="useLocalButton" class="secondary" type="button">Use local lots.geojson</button>
+  <div id="app">
+    <div id="map"></div>
+
+    <div class="topbar">
+      <p class="title">LotPulse Planning Map</p>
+      <p class="subtitle" id="subtitle">
+        Tap a lot to inspect availability, navigate, or set it as your target lot.
+      </p>
+      <div class="chips">
+        <span class="chip" id="userChip">User: —</span>
+        <span class="chip" id="homeChip">Home: —</span>
+        <span class="chip" id="selectedChip">Selected: —</span>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch" style="background:#22c55e"></span><span>High availability</span></div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#f59e0b"></span><span>Medium availability</span></div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#ef4444"></span><span>Low availability</span></div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#2563eb"></span><span>Selected lot</span></div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#a855f7"></span><span>Home marker</span></div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#0ea5e9"></span><span>Your location</span></div>
+    </div>
+
+    <div class="sheet">
+      <div>
+        <h2 id="sheetTitle">No lot selected</h2>
+        <p id="sheetSubtitle">Tap any lot polygon to view details.</p>
+      </div>
+
+      <div class="sheet-meta" id="sheetMeta">
+        Lot ID: —<br />
+        Lot Name: —<br />
+        Available Slots: —<br />
+        Total Slots: —<br />
+        Home Label: —
+      </div>
+
+      <div class="buttons">
+        <button class="btn-secondary" id="recenterBtn" type="button">Recenter</button>
+        <button class="btn-home" id="navigateBtn" type="button" disabled>Navigate</button>
+        <button class="btn-primary" id="targetBtn" type="button" disabled>Set as target</button>
+      </div>
+
+      <div class="status info" id="status"></div>
     </div>
   </div>
 
-  <div id="map"></div>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
 
-  <div class="panel legend">
-    <div>Green = High</div>
-    <div>Orange = Low</div>
-    <div>Red = Full</div>
-    <div>Grey = Unknown / Inactive</div>
-  </div>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const DEFAULT_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pub?gid=1449202579&single=true&output=csv';
-    const DEFAULT_GEOJSON_URL = 'lots.geojson';
-    const LABEL_ZOOM_THRESHOLD = 17;
+    const params = new URLSearchParams(window.location.search);
 
-    const FALLBACK_CSV = `Lot_ID,Cluster_Name,Cluster_Code,Cluster_Lot,Lot_Name,Total_Slots,Available_Slots,Status
-1,France,FRA,1,FRA 1,100,23,ACTIVE
-2,France,FRA,2,FRA 2,100,13,ACTIVE
-3,Spain,SPA,1,SPA 1,100,64,ACTIVE
-4,Russia,RUS,1,RUS 1,100,31,ACTIVE`;
+    const telegramUserId = params.get('telegram_user_id') || '';
+    const homeLat = parseFloat(params.get('home_lat') || '');
+    const homeLng = parseFloat(params.get('home_lng') || '');
+    const homeLabel = params.get('home_label') || '—';
 
-    const FALLBACK_GEOJSON = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { Lot_ID: 1 },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[
-              [55.4033, 25.1618],
-              [55.4037, 25.1618],
-              [55.4037, 25.1615],
-              [55.4033, 25.1615],
-              [55.4033, 25.1618]
-            ]]
-          }
-        },
-        {
-          type: 'Feature',
-          properties: { Lot_ID: 2 },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[
-              [55.40385, 25.1618],
-              [55.40425, 25.1618],
-              [55.40425, 25.1615],
-              [55.40385, 25.1615],
-              [55.40385, 25.1618]
-            ]]
-          }
-        },
-        {
-          type: 'Feature',
-          properties: { Lot_ID: 3 },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[
-              [55.4044, 25.1618],
-              [55.4048, 25.1618],
-              [55.4048, 25.1615],
-              [55.4044, 25.1615],
-              [55.4044, 25.1618]
-            ]]
-          }
-        },
-        {
-          type: 'Feature',
-          properties: { Lot_ID: 4 },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[
-              [55.40495, 25.1618],
-              [55.40535, 25.1618],
-              [55.40535, 25.1615],
-              [55.40495, 25.1615],
-              [55.40495, 25.1618]
-            ]]
-          }
-        }
-      ]
-    };
+    const geojsonUrl = params.get('geojson') || './lots.geojson';
+    const csvUrl = params.get('csv') || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pub?gid=1809032885&single=true&output=csv';
+    const postUrl = params.get('post_url') || 'https://lotpulse-server.onrender.com/api/events/arrival-plan';
 
-    const map = L.map('map');
+    const userChipEl = document.getElementById('userChip');
+    const homeChipEl = document.getElementById('homeChip');
+    const selectedChipEl = document.getElementById('selectedChip');
+    const sheetTitleEl = document.getElementById('sheetTitle');
+    const sheetSubtitleEl = document.getElementById('sheetSubtitle');
+    const sheetMetaEl = document.getElementById('sheetMeta');
+    const statusEl = document.getElementById('status');
+    const recenterBtn = document.getElementById('recenterBtn');
+    const navigateBtn = document.getElementById('navigateBtn');
+    const targetBtn = document.getElementById('targetBtn');
+
+    userChipEl.textContent = `User: ${telegramUserId || '—'}`;
+    homeChipEl.textContent = `Home: ${homeLabel}`;
+
+    const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([25.079, 55.161], 15);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 20,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    let geojsonData = null;
-    let sheetMap = new Map();
-    let layer = null;
-    let labelLayer = L.layerGroup().addTo(map);
-    let hasFitBounds = false;
-    let currentGeoJsonSource = DEFAULT_GEOJSON_URL;
-    let currentSheetSource = DEFAULT_SHEET_CSV_URL || '[embedded fallback CSV]';
-    let lastGeoJsonWarning = '';
-    let lastSheetWarning = '';
+    let geojsonLayer = null;
+    let userMarker = null;
+    let homeMarker = null;
+    let selectedLot = null;
+    let currentUserLat = '';
+    let currentUserLng = '';
+    let lotsMaster = new Map();
+    const lotLayers = new Map();
 
-    const statusEl = document.getElementById('status');
-    const filterEl = document.getElementById('clusterFilter');
-    const csvUrlInputEl = document.getElementById('csvUrlInput');
-    const csvFileInputEl = document.getElementById('csvFileInput');
-    const geojsonUrlInputEl = document.getElementById('geojsonUrlInput');
-    const geojsonFileInputEl = document.getElementById('geojsonFileInput');
-    const reloadButtonEl = document.getElementById('reloadButton');
-    const useLocalButtonEl = document.getElementById('useLocalButton');
-
-    function setStatus(message, isError = false, isHint = false) {
-      statusEl.textContent = message;
-      statusEl.classList.toggle('error', isError);
-      statusEl.classList.toggle('hint', isHint && !isError);
+    function setStatus(text, type = 'info') {
+      statusEl.textContent = text;
+      statusEl.className = `status ${type}`;
     }
 
-    function resolveUrl(url) {
-      return new URL(url, window.location.href).toString();
-    }
-
-    function toErrorMessage(error) {
-      if (!error) return 'Unknown error';
-      if (typeof error === 'string') return error;
-      if (typeof error.message === 'string' && error.message.trim()) return error.message;
-      try {
-        return String(error);
-      } catch {
-        return 'Unknown error';
-      }
-    }
-
-    function cloneFeatureCollection(featureCollection) {
-      return JSON.parse(JSON.stringify(featureCollection));
-    }
-
-    function getGeoJsonSourceFromQuery() {
-      const params = new URLSearchParams(window.location.search);
-      const value = params.get('geojson');
-      return value && value.trim() ? value.trim() : null;
-    }
-
-    function getCsvSourceFromQuery() {
-      const params = new URLSearchParams(window.location.search);
-      const value = params.get('csv');
-      return value && value.trim() ? value.trim() : null;
-    }
-
-    function getRequestedGeoJsonSource() {
-      const inputValue = geojsonUrlInputEl.value.trim();
-      if (inputValue) return inputValue;
-      return currentGeoJsonSource || DEFAULT_GEOJSON_URL;
-    }
-
-    function getRequestedCsvSource() {
-      const inputValue = csvUrlInputEl.value.trim();
-      if (inputValue) return inputValue;
-      return DEFAULT_SHEET_CSV_URL;
-    }
-
-    async function fetchText(url) {
-      const resolvedUrl = resolveUrl(url);
-      let response;
-      try {
-        response = await fetch(resolvedUrl, { cache: 'no-store' });
-      } catch (error) {
-        throw new Error(`Network error while fetching ${resolvedUrl}: ${toErrorMessage(error)}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`);
-      }
-
-      try {
-        return await response.text();
-      } catch (error) {
-        throw new Error(`Failed reading response body from ${resolvedUrl}: ${toErrorMessage(error)}`);
-      }
-    }
-
-    async function fetchJson(url) {
-      const text = await fetchText(url);
-      try {
-        return JSON.parse(text);
-      } catch (error) {
-        throw new Error(`Invalid JSON in ${url}: ${toErrorMessage(error)}`);
-      }
-    }
-
-    async function readFileAsText(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
-        reader.readAsText(file);
-      });
-    }
-
-    function parseCSV(text) {
-      const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-      if (lines.length === 0) return [];
-
-      const headerIndex = lines.findIndex(line => {
-        const cols = splitCSVLine(line).map(v => sanitizeHeader(v));
-        return cols.includes('Lot_ID');
-      });
-
-      if (headerIndex === -1) {
-        throw new Error('CSV header row containing Lot_ID was not found.');
-      }
-
-      const headers = splitCSVLine(lines[headerIndex]).map(value => sanitizeHeader(value));
-      const rows = [];
-
-      for (let i = headerIndex + 1; i < lines.length; i += 1) {
-        const values = splitCSVLine(lines[i]);
-        if (values.every(value => value.trim() === '')) continue;
-
-        const row = {};
-        headers.forEach((header, index) => {
-          row[header] = (values[index] ?? '').trim();
-        });
-        rows.push(row);
-      }
-
-      return rows;
-    }
-
-    function splitCSVLine(line) {
+    function parseCsvLine(line) {
       const result = [];
       let current = '';
-      let inQuotes = false;
+      let insideQuotes = false;
 
-      for (let i = 0; i < line.length; i += 1) {
+      for (let i = 0; i < line.length; i++) {
         const char = line[i];
-        const next = line[i + 1];
+        const nextChar = line[i + 1];
 
-        if (char === '"') {
-          if (inQuotes && next === '"') {
-            current += '"';
-            i += 1;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
+        if (char === '"' && insideQuotes && nextChar === '"') {
+          current += '"';
+          i++;
+        } else if (char === '"') {
+          insideQuotes = !insideQuotes;
+        } else if (char === ',' && !insideQuotes) {
           result.push(current);
           current = '';
         } else {
@@ -392,291 +363,333 @@
       return result;
     }
 
-    function sanitizeHeader(value) {
-      return String(value || '').replace(/^\uFEFF/, '').trim();
-    }
+    function parseCsv(text) {
+      const lines = text.trim().split(/\r?\n/).filter(Boolean);
+      if (!lines.length) return [];
 
-    function normalize(rows) {
-      const normalizedMap = new Map();
+      const headers = parseCsvLine(lines[0]).map(h => h.trim());
 
-      rows.forEach(row => {
-        const id = Number(row.Lot_ID);
-        if (!Number.isFinite(id)) return;
-
-        normalizedMap.set(id, {
-          lot_id: id,
-          cluster: row.Cluster_Name || '',
-          clusterCode: row.Cluster_Code || '',
-          clusterLot: row.Cluster_Lot || '',
-          lotName: row.Lot_Name || `Lot ${id}`,
-          available: Number(row.Available_Slots) || 0,
-          total: Number(row.Total_Slots) || 0,
-          status: String(row.Status || '').trim().toUpperCase() || 'UNKNOWN'
+      return lines.slice(1).map(line => {
+        const values = parseCsvLine(line);
+        const row = {};
+        headers.forEach((header, index) => {
+          row[header] = (values[index] || '').trim();
         });
+        return row;
       });
-
-      return normalizedMap;
     }
 
-    function getFeatureLotId(feature) {
-      const properties = feature && feature.properties ? feature.properties : {};
-      const rawValue = properties.Lot_ID ?? properties.lot_id ?? properties.LOT_ID ?? properties.LotId ?? properties.lotId;
-      const id = Number(rawValue);
-      return Number.isFinite(id) ? id : null;
+    function getLotIdFromFeature(feature) {
+      const p = feature.properties || {};
+      return String(p.lot_id || p.Lot_ID || p.lotId || p.id || '').trim();
     }
 
-    function getColor(available, total, status) {
-      if (status !== 'ACTIVE') return '#64748b';
-      if (!Number.isFinite(total) || total <= 0) return '#64748b';
-
-      const ratio = available / total;
-      if (ratio <= 0.1) return '#dc2626';
-      if (ratio <= 0.3) return '#f59e0b';
-      return '#16a34a';
+    function getLotData(lotId) {
+      return lotsMaster.get(String(lotId)) || null;
     }
 
-    function buildPopupHtml(row, id) {
-      const lotName = row?.lotName || `Lot ${id}`;
-      const cluster = row?.cluster || '-';
-      const available = row?.available ?? 0;
-      const total = row?.total ?? 0;
-      const status = row?.status || 'UNKNOWN';
+    function availabilityRatio(lotData) {
+      const available = Number(lotData?.Available_Slots || 0);
+      const total = Number(lotData?.Total_Slots || 0);
+      if (!total || Number.isNaN(total)) return 0;
+      return available / total;
+    }
+
+    function styleForLot(lotId) {
+      const lotData = getLotData(lotId);
+      const ratio = availabilityRatio(lotData);
+      const isSelected = selectedLot && String(selectedLot.lotId) === String(lotId);
+
+      if (isSelected) {
+        return {
+          color: '#2563eb',
+          weight: 4,
+          fillColor: '#2563eb',
+          fillOpacity: 0.35
+        };
+      }
+
+      if (ratio >= 0.5) {
+        return {
+          color: '#22c55e',
+          weight: 2,
+          fillColor: '#22c55e',
+          fillOpacity: 0.26
+        };
+      }
+
+      if (ratio >= 0.2) {
+        return {
+          color: '#f59e0b',
+          weight: 2,
+          fillColor: '#f59e0b',
+          fillOpacity: 0.24
+        };
+      }
+
+      return {
+        color: '#ef4444',
+        weight: 2,
+        fillColor: '#ef4444',
+        fillOpacity: 0.22
+      };
+    }
+
+    function updateAllStyles() {
+      lotLayers.forEach((entry) => {
+        entry.layer.setStyle(styleForLot(entry.lotId));
+      });
+    }
+
+    function updateSelectedPanel() {
+      selectedChipEl.textContent = `Selected: ${selectedLot ? selectedLot.lotName : '—'}`;
+      navigateBtn.disabled = !selectedLot;
+      targetBtn.disabled = !selectedLot || !telegramUserId;
+
+      if (!selectedLot) {
+        sheetTitleEl.textContent = 'No lot selected';
+        sheetSubtitleEl.textContent = 'Tap any lot polygon to view details.';
+        sheetMetaEl.innerHTML = `Lot ID: —<br />Lot Name: —<br />Available Slots: —<br />Total Slots: —<br />Home Label: ${homeLabel}`;
+        return;
+      }
+
+      sheetTitleEl.textContent = `${selectedLot.lotName}`;
+      sheetSubtitleEl.textContent = 'Review availability, navigate, or set this lot as your target.';
+      sheetMetaEl.innerHTML =
+        `Lot ID: ${selectedLot.lotId}<br />` +
+        `Lot Name: ${selectedLot.lotName}<br />` +
+        `Available Slots: ${selectedLot.availableSlots}<br />` +
+        `Total Slots: ${selectedLot.totalSlots}<br />` +
+        `Home Label: ${homeLabel}`;
+    }
+
+    function selectLot(lotId) {
+      const lotData = getLotData(lotId);
+      const lotName = lotData?.Lot_Name || `Lot ${lotId}`;
+      const availableSlots = lotData?.Available_Slots || '—';
+      const totalSlots = lotData?.Total_Slots || '—';
+      const bounds = lotLayers.get(String(lotId))?.layer?.getBounds();
+
+      selectedLot = {
+        lotId: String(lotId),
+        lotName,
+        availableSlots,
+        totalSlots,
+        bounds
+      };
+
+      updateAllStyles();
+      updateSelectedPanel();
+      setStatus(`Selected ${lotName}.`, 'info');
+    }
+
+    function createLotPopupHtml(lotId) {
+      const lotData = getLotData(lotId);
+      const lotName = lotData?.Lot_Name || `Lot ${lotId}`;
+      const available = lotData?.Available_Slots || '—';
+      const total = lotData?.Total_Slots || '—';
 
       return `
-        <strong>${escapeHtml(lotName)}</strong><br>
-        Lot ID: ${id}<br>
-        Cluster: ${escapeHtml(cluster)}<br>
-        Availability: ${available}/${total}<br>
-        Status: ${escapeHtml(status)}
+        <div class="lot-popup">
+          <strong>${lotName}</strong>
+          Lot ID: ${lotId}<br />
+          Available: ${available}<br />
+          Total: ${total}
+        </div>
       `;
     }
 
-    function escapeHtml(value) {
-      return String(value)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+    function openNavigation() {
+      if (!selectedLot || !selectedLot.bounds) return;
+
+      const center = selectedLot.bounds.getCenter();
+      const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(center.lat + ',' + center.lng)}`;
+      window.open(navUrl, '_blank');
     }
 
-    function clearLayers() {
-      if (layer) {
-        map.removeLayer(layer);
-        layer = null;
-      }
-      labelLayer.clearLayers();
-    }
-
-    function clearDataAndLayers() {
-      geojsonData = null;
-      clearLayers();
-      hasFitBounds = false;
-    }
-
-    function render() {
-      if (!geojsonData || !Array.isArray(geojsonData.features)) {
-        setStatus('GeoJSON data is missing or invalid.', true);
-        clearLayers();
+    async function setTargetLot() {
+      if (!selectedLot) {
+        setStatus('Select a lot first.', 'error');
         return;
       }
 
-      clearLayers();
+      if (!telegramUserId) {
+        setStatus('telegram_user_id is missing in the page URL.', 'error');
+        return;
+      }
 
-      const selectedCluster = filterEl.value;
-      let renderedCount = 0;
+      targetBtn.disabled = true;
+      setStatus(`Saving target lot ${selectedLot.lotName}…`, 'info');
 
-      layer = L.geoJSON(geojsonData, {
-        style: feature => {
-          const id = getFeatureLotId(feature);
-          const row = id !== null ? sheetMap.get(id) : null;
+      try {
+        const payload = {
+          telegram_user_id: telegramUserId,
+          event_type: 'inbound_planned',
+          lot_id: selectedLot.lotId,
+          predicted_lot_id: selectedLot.lotId,
+          timestamp: new Date().toISOString(),
+          source: 'telegram_map',
+          user_lat: currentUserLat || '',
+          user_lng: currentUserLng || '',
+          notes: 'user selected target lot from planning map'
+        };
 
-          return {
-            color: '#111827',
-            weight: 1,
-            fillColor: getColor(row?.available, row?.total, row?.status),
-            fillOpacity: 0.5
-          };
-        },
-        filter: feature => {
-          const id = getFeatureLotId(feature);
-          const row = id !== null ? sheetMap.get(id) : null;
+        const res = await fetch(postUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-          if (!row) return selectedCluster === 'ALL';
-          if (selectedCluster === 'ALL') return true;
-          return row.cluster === selectedCluster;
-        },
-        onEachFeature: (feature, leafletLayer) => {
-          const id = getFeatureLotId(feature);
-          const row = id !== null ? sheetMap.get(id) : null;
-          renderedCount += 1;
+        const raw = await res.text();
+        let data = {};
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          throw new Error(`Server did not return JSON. Raw response: ${raw.slice(0, 300)}`);
+        }
 
-          const available = row?.available ?? 0;
-          const total = row?.total ?? 0;
-          const labelName = row?.lotName || `Lot ${id ?? '?'}`;
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `Request failed: ${res.status}`);
+        }
 
-          leafletLayer.bindPopup(buildPopupHtml(row, id ?? '?'));
+        setStatus(`Target lot saved: ${selectedLot.lotName}.`, 'success');
+        sheetSubtitleEl.textContent = 'Target lot saved successfully.';
+      } catch (error) {
+        setStatus(error.message || 'Failed to save target lot.', 'error');
+      } finally {
+        targetBtn.disabled = false;
+      }
+    }
 
-          if (map.getZoom() >= LABEL_ZOOM_THRESHOLD) {
-            const center = leafletLayer.getBounds().getCenter();
-            labelLayer.addLayer(L.marker(center, {
-              interactive: false,
-              icon: L.divIcon({
-                className: 'lot-label',
-                html: `${escapeHtml(labelName)}<br>${available}/${total}`
-              })
-            }));
+    function addHomeMarker() {
+      if (Number.isFinite(homeLat) && Number.isFinite(homeLng)) {
+        homeMarker = L.circleMarker([homeLat, homeLng], {
+          radius: 8,
+          color: '#a855f7',
+          fillColor: '#a855f7',
+          fillOpacity: 0.95,
+          weight: 2
+        }).addTo(map);
+
+        homeMarker.bindPopup(`<strong>${homeLabel || 'Home'}</strong><br />Saved destination`);
+      }
+    }
+
+    function locateUser() {
+      if (!navigator.geolocation) {
+        setStatus('Geolocation is not supported in this browser.', 'error');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          currentUserLat = String(position.coords.latitude);
+          currentUserLng = String(position.coords.longitude);
+
+          if (userMarker) {
+            map.removeLayer(userMarker);
           }
+
+          userMarker = L.circleMarker([position.coords.latitude, position.coords.longitude], {
+            radius: 8,
+            color: '#0ea5e9',
+            fillColor: '#0ea5e9',
+            fillOpacity: 0.95,
+            weight: 2,
+            interactive: false
+          }).addTo(map);
+
+          userMarker.bindPopup('<strong>Your Location</strong>');
+
+          setStatus('Current location loaded.', 'info');
+        },
+        (error) => {
+          setStatus(`Location unavailable: ${error.message}`, 'error');
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 10000
+        }
+      );
+    }
+
+    async function loadCsvData() {
+      const res = await fetch(csvUrl);
+      if (!res.ok) throw new Error(`Failed to load CSV: ${res.status}`);
+      const text = await res.text();
+      const rows = parseCsv(text);
+
+      rows.forEach((row) => {
+        const lotId = String(row.Lot_ID || '').trim();
+        if (!lotId) return;
+        lotsMaster.set(lotId, row);
+      });
+    }
+
+    async function loadGeojson() {
+      const res = await fetch(geojsonUrl);
+      if (!res.ok) throw new Error(`Failed to load GeoJSON: ${res.status}`);
+      const data = await res.json();
+
+      geojsonLayer = L.geoJSON(data, {
+        style: (feature) => styleForLot(getLotIdFromFeature(feature)),
+        onEachFeature: (feature, layer) => {
+          const lotId = getLotIdFromFeature(feature);
+          const lotData = getLotData(lotId);
+          const lotName = lotData?.Lot_Name || `Lot ${lotId}`;
+
+          lotLayers.set(String(lotId), {
+            layer,
+            lotId: String(lotId)
+          });
+
+          layer.bindPopup(createLotPopupHtml(lotId));
+          layer.bindTooltip(lotName, { sticky: true, direction: 'center', opacity: 0.9 });
+
+          layer.on('click', () => {
+            selectLot(lotId);
+          });
         }
       }).addTo(map);
 
-      if (!hasFitBounds && layer.getBounds().isValid()) {
-        map.fitBounds(layer.getBounds(), { padding: [20, 20] });
-        hasFitBounds = true;
-      }
-
-      const warnings = [lastSheetWarning, lastGeoJsonWarning].filter(Boolean);
-      const warningSuffix = warnings.length ? `\n${warnings.join('\n')}` : '';
-      setStatus(`Loaded ${renderedCount} lots • Zoom ${map.getZoom()} • Filter ${selectedCluster}\nCSV source: ${currentSheetSource}\nGeoJSON source: ${currentGeoJsonSource}${warningSuffix}`);
-    }
-
-    async function loadGeoJsonFromSource(source) {
-      currentGeoJsonSource = source;
-      geojsonUrlInputEl.value = source === DEFAULT_GEOJSON_URL ? '' : source;
-      return fetchJson(source);
-    }
-
-    async function loadGeoJsonFromFile(file) {
-      const text = await readFileAsText(file);
-      currentGeoJsonSource = `[file] ${file.name}`;
-      geojsonUrlInputEl.value = '';
-      try {
-        return JSON.parse(text);
-      } catch (error) {
-        throw new Error(`Invalid JSON in uploaded file ${file.name}: ${toErrorMessage(error)}`);
+      const bounds = geojsonLayer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.12));
       }
     }
 
-    async function loadSheet() {
-      const uploadedFile = csvFileInputEl.files && csvFileInputEl.files[0] ? csvFileInputEl.files[0] : null;
-      if (uploadedFile) {
-        const csvText = await readFileAsText(uploadedFile);
-        currentSheetSource = `[file] ${uploadedFile.name}`;
-        csvUrlInputEl.value = '';
-        return normalize(parseCSV(csvText));
+    recenterBtn.addEventListener('click', () => {
+      const group = L.featureGroup(
+        [
+          geojsonLayer,
+          homeMarker,
+          userMarker
+        ].filter(Boolean)
+      );
+
+      if (group.getLayers().length) {
+        map.fitBounds(group.getBounds().pad(0.12));
       }
-
-      const requestedSource = getRequestedCsvSource();
-      if (!requestedSource) {
-        currentSheetSource = '[embedded fallback CSV]';
-        lastSheetWarning = 'No CSV URL configured. Using embedded fallback CSV.';
-        return normalize(parseCSV(FALLBACK_CSV));
-      }
-
-      currentSheetSource = requestedSource;
-      const csvText = await fetchText(requestedSource);
-      return normalize(parseCSV(csvText));
-    }
-
-    async function loadGeoJsonWithFallback() {
-      const uploadedFile = geojsonFileInputEl.files && geojsonFileInputEl.files[0] ? geojsonFileInputEl.files[0] : null;
-      if (uploadedFile) {
-        lastGeoJsonWarning = '';
-        return loadGeoJsonFromFile(uploadedFile);
-      }
-
-      const requestedSource = getRequestedGeoJsonSource();
-      try {
-        lastGeoJsonWarning = '';
-        return await loadGeoJsonFromSource(requestedSource);
-      } catch (error) {
-        if (requestedSource === DEFAULT_GEOJSON_URL) {
-          currentGeoJsonSource = '[fallback demo data]';
-          lastGeoJsonWarning = `GeoJSON fetch failed. Showing fallback demo polygons. (${toErrorMessage(error)})`;
-          return cloneFeatureCollection(FALLBACK_GEOJSON);
-        }
-        throw error;
-      }
-    }
-
-    async function load() {
-      clearDataAndLayers();
-      lastSheetWarning = '';
-      lastGeoJsonWarning = '';
-
-      try {
-        setStatus('Loading map data...');
-        sheetMap = await loadSheet();
-      } catch (error) {
-        sheetMap = normalize(parseCSV(FALLBACK_CSV));
-        currentSheetSource = '[embedded fallback CSV]';
-        lastSheetWarning = `CSV load failed. Using embedded fallback CSV. (${toErrorMessage(error)})`;
-      }
-
-      try {
-        geojsonData = await loadGeoJsonWithFallback();
-        if (!geojsonData || !Array.isArray(geojsonData.features)) {
-          throw new Error('GeoJSON must contain a features array.');
-        }
-      } catch (error) {
-        console.error(error);
-        clearDataAndLayers();
-        setStatus(`Load failed: ${toErrorMessage(error)}`, true);
-        return;
-      }
-
-      render();
-    }
-
-    function runTests() {
-      console.assert(typeof DEFAULT_SHEET_CSV_URL === 'string', 'Test failed: DEFAULT_SHEET_CSV_URL must be defined');
-      console.assert(JSON.stringify(splitCSVLine('a,b,c')) === JSON.stringify(['a', 'b', 'c']), 'Test failed: simple CSV split');
-      console.assert(JSON.stringify(splitCSVLine('a,"b,c",d')) === JSON.stringify(['a', 'b,c', 'd']), 'Test failed: quoted CSV split');
-      console.assert(sanitizeHeader('\uFEFFLot_ID') === 'Lot_ID', 'Test failed: BOM header sanitization');
-      console.assert(getColor(0, 100, 'ACTIVE') === '#dc2626', 'Test failed: red color threshold');
-      console.assert(getColor(20, 100, 'ACTIVE') === '#f59e0b', 'Test failed: orange color threshold');
-      console.assert(getColor(80, 100, 'ACTIVE') === '#16a34a', 'Test failed: green color threshold');
-      console.assert(getColor(10, 0, 'ACTIVE') === '#64748b', 'Test failed: unknown color when total is zero');
-      console.assert(getFeatureLotId({ properties: { Lot_ID: 123 } }) === 123, 'Test failed: feature Lot_ID extraction');
-      console.assert(getFeatureLotId({ properties: { lot_id: 456 } }) === 456, 'Test failed: feature lot_id extraction');
-      console.assert(resolveUrl('lots.geojson').endsWith('/lots.geojson'), 'Test failed: local URL resolution');
-      console.assert(parseCSV('title\nLot_ID,Cluster_Name,Total_Slots,Available_Slots,Status\n1,France,100,20,ACTIVE').length === 1, 'Test failed: CSV parser should find header row after title');
-      console.assert(normalize([{ Lot_ID: '7', Cluster_Name: 'Russia', Cluster_Code: 'RUS', Cluster_Lot: '8', Lot_Name: 'RUS 8', Total_Slots: '100', Available_Slots: '55', Status: 'ACTIVE' }]).get(7).lotName === 'RUS 8', 'Test failed: normalize should map lot name');
-      console.assert(FALLBACK_GEOJSON.features.length === 4, 'Test failed: fallback GeoJSON should contain demo features');
-      console.assert(getFeatureLotId(FALLBACK_GEOJSON.features[0]) === 1, 'Test failed: fallback GeoJSON feature ID extraction');
-      console.assert(parseCSV('Parking Lot Master\n\nLot_ID,Cluster_Name,Total_Slots,Available_Slots,Status\n1,France,100,20,ACTIVE\n').length === 1, 'Test failed: CSV parser should ignore title and blank rows');
-      console.assert(normalize(parseCSV(FALLBACK_CSV)).size === 4, 'Test failed: fallback CSV should normalize into 4 lots');
-      console.assert(toErrorMessage(new TypeError('Load failed')) === 'Load failed', 'Test failed: error message normalization');
-      console.assert(cloneFeatureCollection(FALLBACK_GEOJSON) !== FALLBACK_GEOJSON, 'Test failed: cloned feature collection should be a new object');
-      console.assert(getRequestedCsvSource() === DEFAULT_SHEET_CSV_URL, 'Test failed: requested CSV source should fall back to default constant');
-      console.assert(getRequestedGeoJsonSource() === DEFAULT_GEOJSON_URL, 'Test failed: requested GeoJSON source should fall back to default constant');
-      console.assert(normalize(parseCSV('Lot_ID,Cluster_Name,Cluster_Code,Cluster_Lot,Lot_Name,Total_Slots,Available_Slots,Status\n9,Italy,ITA,3,ITA 3,100,88,ACTIVE')).get(9).available === 88, 'Test failed: normalize should parse available slots');
-    }
-
-    filterEl.addEventListener('change', render);
-    map.on('zoomend', render);
-    reloadButtonEl.addEventListener('click', load);
-    useLocalButtonEl.addEventListener('click', () => {
-      geojsonFileInputEl.value = '';
-      geojsonUrlInputEl.value = '';
-      currentGeoJsonSource = DEFAULT_GEOJSON_URL;
-      lastGeoJsonWarning = '';
-      load();
     });
 
-    const queryGeoJsonSource = getGeoJsonSourceFromQuery();
-    if (queryGeoJsonSource) {
-      currentGeoJsonSource = queryGeoJsonSource;
-      geojsonUrlInputEl.value = queryGeoJsonSource;
+    navigateBtn.addEventListener('click', openNavigation);
+    targetBtn.addEventListener('click', setTargetLot);
+
+    async function init() {
+      setStatus('Loading map data…', 'info');
+      updateSelectedPanel();
+      addHomeMarker();
+      locateUser();
+      await loadCsvData();
+      await loadGeojson();
+      setStatus('Tap a lot to inspect it.', 'info');
     }
 
-    const queryCsvSource = getCsvSourceFromQuery();
-    if (queryCsvSource) {
-      csvUrlInputEl.value = queryCsvSource;
-    }
-
-    runTests();
-    load();
+    init().catch((error) => {
+      console.error(error);
+      setStatus(error.message || 'Failed to load map.', 'error');
+    });
   </script>
 </body>
 </html>

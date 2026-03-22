@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LotPulse Departure Selection</title>
+  <title>LotPulse Lot Confirmation</title>
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -22,6 +22,7 @@
       --success: #22c55e;
       --danger: #ef4444;
       --location: #10b981;
+      --home: #a855f7;
     }
 
     * { box-sizing: border-box; }
@@ -104,6 +105,11 @@
       color: #6ee7b7;
     }
 
+    .chip.home {
+      border-color: rgba(168, 85, 247, 0.45);
+      color: #e9d5ff;
+    }
+
     .legend {
       position: absolute;
       right: 12px;
@@ -138,6 +144,15 @@
       background: var(--location);
       border: 2px solid white;
       box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    }
+
+    .legend-home {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--home);
+      border: 2px solid white;
+      box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.25);
     }
 
     .sheet {
@@ -240,12 +255,13 @@
     <div id="map"></div>
 
     <div class="topbar">
-      <p class="title">Confirm departure lot</p>
+      <p class="title" id="pageTitle">Confirm lot</p>
       <p class="subtitle" id="subtitle">Tap the correct lot on the map. The predicted lot is highlighted.</p>
       <div class="chips">
         <span class="chip predicted" id="predictedChip">Predicted: —</span>
         <span class="chip selected" id="selectedChip">Selected: —</span>
         <span class="chip location" id="locationChip">Location: unavailable</span>
+        <span class="chip home" id="homeChip">Home: —</span>
       </div>
     </div>
 
@@ -254,6 +270,7 @@
       <div class="legend-item"><span class="legend-swatch" style="background:#2563eb"></span><span>Selected lot</span></div>
       <div class="legend-item"><span class="legend-swatch" style="background:#475569"></span><span>Other lots</span></div>
       <div class="legend-item"><span class="legend-dot"></span><span>Your location</span></div>
+      <div class="legend-item"><span class="legend-home"></span><span>Home location</span></div>
     </div>
 
     <div class="sheet">
@@ -261,14 +278,14 @@
       <p id="sheetSubtitle">Tap any marked lot to continue.</p>
 
       <div class="sheet-meta" id="sheetMeta">
-        User: —<br />
-        Mode: departure<br />
-        Predicted lot: —
+        Mode: —<br />
+        Predicted lot: —<br />
+        Selected lot: —
       </div>
 
       <div class="buttons">
         <button class="btn-secondary" id="recenterBtn" type="button">Recenter</button>
-        <button class="btn-primary" id="confirmBtn" type="button" disabled>Confirm departure</button>
+        <button class="btn-primary" id="confirmBtn" type="button" disabled>Confirm</button>
       </div>
 
       <div class="status info" id="status"></div>
@@ -283,27 +300,49 @@
   <script>
     const params = new URLSearchParams(window.location.search);
 
-    const predictedLotId = String(params.get('predicted_id') || '12');
-    const userId = params.get('user_id') || 'j';
-    const mode = params.get('mode') || 'departure';
+    const userRef = params.get('user_ref') || '';
+    const predictedLotId = String(params.get('predicted_lot_id') || '');
+    const mode = (params.get('mode') || 'arrival').trim().toLowerCase();
+
+    const homeLat = parseFloat(params.get('home_lat') || '');
+    const homeLng = parseFloat(params.get('home_lng') || '');
+    const homeLabel = params.get('home_label') || '—';
+
     const geojsonUrl = params.get('geojson') || './lots.geojson';
     const lotLookupCsvUrl =
       params.get('lot_lookup_csv') ||
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vSMe68LcNpLQev2oeCkSkHhCyuk9XxRln0P8xddDPKXPEa8_oznimCGSPhud12uZRPx7GE5UmSE0hW7/pub?gid=1809032885&single=true&output=csv';
-    const postUrl = params.get('post_url') || 'https://lotpulse-server.onrender.com/api/events/departure';
+
+    const arrivalPostUrl =
+      params.get('arrival_post_url') ||
+      'https://lotpulse-server.onrender.com/api/events/arrival';
+
+    const departurePostUrl =
+      params.get('departure_post_url') ||
+      'https://lotpulse-server.onrender.com/api/events/departure';
+
     const successRedirectUrl = params.get('success_redirect') || './index.html';
     const autoCloseDelayMs = Number(params.get('close_delay_ms') || '1800');
 
+    const pageTitleEl = document.getElementById('pageTitle');
     const subtitleEl = document.getElementById('subtitle');
     const predictedChipEl = document.getElementById('predictedChip');
     const selectedChipEl = document.getElementById('selectedChip');
     const locationChipEl = document.getElementById('locationChip');
+    const homeChipEl = document.getElementById('homeChip');
     const sheetTitleEl = document.getElementById('sheetTitle');
     const sheetSubtitleEl = document.getElementById('sheetSubtitle');
     const sheetMetaEl = document.getElementById('sheetMeta');
     const statusEl = document.getElementById('status');
     const confirmBtn = document.getElementById('confirmBtn');
     const recenterBtn = document.getElementById('recenterBtn');
+
+    const isArrivalMode = mode === 'arrival';
+    const confirmButtonLabel = isArrivalMode ? 'Confirm arrival' : 'Confirm departure';
+
+    pageTitleEl.textContent = isArrivalMode ? 'Confirm arrival lot' : 'Confirm departure lot';
+    confirmBtn.textContent = confirmButtonLabel;
+    homeChipEl.textContent = `Home: ${homeLabel}`;
 
     const map = L.map('map', {
       zoomControl: true,
@@ -321,6 +360,7 @@
     let lotNameLookup = new Map();
     const lotLayers = new Map();
     let userLocationMarker = null;
+    let homeLocationMarker = null;
     let userLatLng = null;
 
     function setStatus(text, type = 'info') {
@@ -404,7 +444,7 @@
     function styleForLot(lotId) {
       const lotIdStr = String(lotId);
       const isSelected = selectedLot && String(selectedLot.lotId) === lotIdStr;
-      const isPredicted = String(predictedLotId) === lotIdStr;
+      const isPredicted = predictedLotId && String(predictedLotId) === lotIdStr;
 
       if (isSelected) {
         return {
@@ -443,11 +483,19 @@
 
       if (selectedLot) {
         sheetTitleEl.textContent = `Selected lot: ${selectedLot.lotName}`;
-        sheetSubtitleEl.textContent = 'Confirm departure from this selected lot.';
+        sheetSubtitleEl.textContent = isArrivalMode
+          ? 'Confirm arrival at this selected lot.'
+          : 'Confirm departure from this selected lot.';
       } else {
         sheetTitleEl.textContent = 'No lot selected';
         sheetSubtitleEl.textContent = 'Tap any marked lot to continue.';
       }
+
+      const predictedLotName = predictedLotId ? getDisplayLotNameFromId(predictedLotId) : '—';
+      sheetMetaEl.innerHTML =
+        `Mode: ${mode}<br />` +
+        `Predicted lot: ${predictedLotName}<br />` +
+        `Selected lot: ${selectedLot ? selectedLot.lotName : '—'}`;
     }
 
     function updateUserLocation(lat, lng) {
@@ -494,15 +542,32 @@
       );
     }
 
+    function addHomeMarker() {
+      if (Number.isFinite(homeLat) && Number.isFinite(homeLng)) {
+        homeLocationMarker = L.circleMarker([homeLat, homeLng], {
+          radius: 5,
+          color: '#ffffff',
+          weight: 2,
+          fillColor: '#a855f7',
+          fillOpacity: 1,
+          interactive: false,
+          bubblingMouseEvents: false
+        }).addTo(map);
+
+        homeLocationMarker.bindPopup(`<strong>${homeLabel || 'Home'}</strong>`);
+      }
+    }
+
     async function loadLots() {
       setStatus('Loading lot map…', 'info');
 
       await loadLotMaster();
 
-      const predictedLotName = getDisplayLotNameFromId(predictedLotId);
+      const predictedLotName = predictedLotId ? getDisplayLotNameFromId(predictedLotId) : '—';
       predictedChipEl.textContent = `Predicted: ${predictedLotName}`;
-      sheetMetaEl.innerHTML = `User: ${userId}<br />Mode: ${mode}<br />Predicted lot: ${predictedLotName}`;
-      subtitleEl.textContent = `Tap the correct lot on the map. Predicted lot ${predictedLotName} is highlighted.`;
+      subtitleEl.textContent = isArrivalMode
+        ? `Tap the lot where you actually parked. Predicted lot ${predictedLotName} is highlighted.`
+        : `Tap the correct departure lot. Predicted lot ${predictedLotName} is highlighted.`;
 
       const res = await fetch(geojsonUrl);
       if (!res.ok) {
@@ -538,7 +603,12 @@
               lotName
             };
             updateAllStyles();
-            setStatus(`Selected ${lotName}. Confirm to submit departure.`, 'info');
+            setStatus(
+              isArrivalMode
+                ? `Selected ${lotName}. Confirm to submit arrival.`
+                : `Selected ${lotName}. Confirm to submit departure.`,
+              'info'
+            );
           });
 
           if (String(lotId) === String(predictedLotId)) {
@@ -555,9 +625,10 @@
         map.fitBounds(bounds.pad(0.15));
       }
 
+      addHomeMarker();
       updateAllStyles();
       requestUserLocation();
-      setStatus('Tap a lot, then confirm departure.', 'info');
+      setStatus('Tap a lot, then confirm.', 'info');
     }
 
     function finishAndExit() {
@@ -572,42 +643,72 @@
       }, autoCloseDelayMs);
     }
 
-    async function confirmDeparture() {
+    async function confirmSelection() {
       if (!selectedLot) {
         setStatus('Select a lot first.', 'error');
         return;
       }
 
+      if (!userRef) {
+        setStatus('Missing user_ref.', 'error');
+        return;
+      }
+
       confirmBtn.disabled = true;
       recenterBtn.disabled = true;
-      setStatus(`Submitting departure for ${selectedLot.lotName}…`, 'info');
+
+      setStatus(
+        isArrivalMode
+          ? `Submitting arrival for ${selectedLot.lotName}…`
+          : `Submitting departure for ${selectedLot.lotName}…`,
+        'info'
+      );
 
       try {
         const payload = {
-          user_id: userId,
+          user_ref: userRef,
           lot_id: selectedLot.lotId,
-          lot_name: selectedLot.lotName,
-          event_type: 'departure_confirmed',
+          predicted_lot_id: predictedLotId || '',
+          event_type: isArrivalMode ? 'arrival_confirmed' : 'departure_confirmed',
           timestamp: new Date().toISOString(),
-          source: 'ios_map_corrected_lot',
+          source: isArrivalMode ? 'ios_map_corrected_lot' : 'ios_map_corrected_lot',
           user_lat: userLatLng ? userLatLng.lat : null,
-          user_lng: userLatLng ? userLatLng.lng : null
+          user_lng: userLatLng ? userLatLng.lng : null,
+          notes: isArrivalMode
+            ? 'user corrected inbound lot from shortcut'
+            : 'user corrected departure lot from shortcut'
         };
 
-        const res = await fetch(postUrl, {
+        const targetUrl = isArrivalMode ? arrivalPostUrl : departurePostUrl;
+
+        const res = await fetch(targetUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
-        const data = await res.json();
+        const rawText = await res.text();
+
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(`Server did not return JSON. Raw response: ${rawText.slice(0, 300)}`);
+        }
 
         if (!res.ok || !data.ok) {
           throw new Error(data.error || `Request failed: ${res.status}`);
         }
 
-        setStatus('Request confirmed.', 'success');
-        sheetSubtitleEl.textContent = 'Request confirmed. Closing this page…';
+        setStatus(
+          isArrivalMode ? 'Arrival confirmed.' : 'Departure confirmed.',
+          'success'
+        );
+
+        sheetSubtitleEl.textContent = isArrivalMode
+          ? 'Arrival confirmed. Closing this page…'
+          : 'Departure confirmed. Closing this page…';
+
         finishAndExit();
       } catch (err) {
         setStatus(`Submission failed: ${err.message || 'unknown error'}`, 'error');
@@ -618,19 +719,19 @@
     }
 
     recenterBtn.addEventListener('click', () => {
-      if (userLatLng) {
-        map.flyTo(userLatLng, Math.max(map.getZoom(), 18));
-        return;
-      }
+      const layers = [];
 
-      if (predictedBounds && predictedBounds.isValid()) {
-        map.fitBounds(predictedBounds.pad(0.8));
-      } else if (geojsonLayer) {
-        map.fitBounds(geojsonLayer.getBounds().pad(0.15));
+      if (geojsonLayer) layers.push(geojsonLayer);
+      if (homeLocationMarker) layers.push(homeLocationMarker);
+      if (userLocationMarker) layers.push(userLocationMarker);
+
+      const group = L.featureGroup(layers);
+      if (group.getLayers().length) {
+        map.fitBounds(group.getBounds().pad(0.12));
       }
     });
 
-    confirmBtn.addEventListener('click', confirmDeparture);
+    confirmBtn.addEventListener('click', confirmSelection);
 
     loadLots().catch((err) => {
       setStatus(err.message, 'error');
